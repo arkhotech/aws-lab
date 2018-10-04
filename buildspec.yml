@@ -4,8 +4,6 @@ phases:
   build:
     commands:
       - javac Test.java
-#artifacts:
-#  files:
-#    - *.java
-#  discard-paths: yes
-#  base-directory: /
+artifacts:
+  files:
+    - Test.class 
