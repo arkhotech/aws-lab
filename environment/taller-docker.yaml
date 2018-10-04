@@ -1,0 +1,244 @@
+AWSTemplateFormatVersion: 2010-09-09
+Mappings:
+  RegionMap:
+    us-east-1:
+      "1" : "ami-04169656fea786776" #Cambiar por la que corresponda
+#    us-east-2:
+#      "1" : "ami-916f59f4"
+Parameters:
+
+  VPCName:
+    Type: String
+    Description: Nombre de la VPC
+    MaxLength: 30
+  CIDR:
+    Type: String
+    Description: Bloque Ip
+    Default: 171.16.5.0/24
+  CIDRSubnet1:
+    Type: String
+    Description: Bloque Ip Subred 1
+    Default: 171.16.5.0/28
+  CIDRSubnet2:
+    Type: String
+    Description: Bloque Ip Subred 2
+    Default: 171.16.5.32/28
+  SubnetZona1:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: Zona para la subnet1
+  SubnetZona2:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Description: Zona para la subnet2
+
+  # KeyPairs:
+  #   Type: List<AWS::EC2::KeyPair::KeyName>
+  #   Description: Par de claves para accesos a Instancias
+  HostedZone:
+    Type: String
+    Default: arkho.review.
+
+# Conditions:
+#   PROD: !Equals [ !Ref Ambiente, PROD ]
+
+Resources:
+  vpcdef:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref CIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags: 
+        - Key : Name 
+          Value:  !Ref VPCName
+        - Key : Project
+          Value: docker-workshop
+        - Key: Environment
+          Value: !Ref VPCName
+
+
+  publicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: !Ref CIDRSubnet1
+      AvailabilityZone: !Select [0,!Ref SubnetZona1]
+      VpcId: 
+        Ref: vpcdef
+      Tags:
+      - Key: Name
+        Value: !Join [ "-" , [ !Ref VPCName , public, subnet]]
+
+  privateSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: !Ref CIDRSubnet2
+      AvailabilityZone: !Select [0,!Ref SubnetZona2]
+      VpcId: 
+        Ref: vpcdef
+      Tags:
+      - Key: Name
+        Value: !Join [ "-" , [ !Ref VPCName , private, subnet ]]
+
+  Internet:
+    Type: "AWS::EC2::InternetGateway"
+    Properties: 
+      Tags:
+        - Key: Name
+          Value: !Join [ "-" , [!Ref VPCName, InternetGateway]]
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: 
+        Ref: vpcdef
+      InternetGatewayId:
+        Ref: Internet
+
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NAT:
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - EIP
+        - AllocationId
+      SubnetId:
+        Ref: privateSubnet
+      Tags:
+        - Key: Name
+          Value: !Join [ "-" , [!Ref VPCName, NATGateway]]
+
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: 
+        Ref: vpcdef
+      Tags:
+      - Key: Name
+        Value: !Join [ "-" , [!Ref VPCName, PublicRoute ]]
+
+  PrivateRouteTable:
+    DependsOn: NAT
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: 
+        Ref: vpcdef
+      Tags:
+      - Key: Name
+        Value: !Join [ "-" , [!Ref VPCName, PrivateRoute ]]
+  
+  PublicRoute:
+    Type: "AWS::EC2::Route"
+    DependsOn: Internet
+    Properties:
+      DestinationCidrBlock: '0.0.0.0/0'
+      RouteTableId:
+        Ref: PublicRouteTable
+      GatewayId:
+        Ref: Internet
+
+  PrivateRoute:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationCidrBlock: '0.0.0.0/0'
+      RouteTableId:
+        Ref: PrivateRouteTable
+      GatewayId:
+        Ref: Internet
+
+  PublicRouteAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref publicSubnet
+
+  PrivateRouteAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref privateSubnet
+  
+
+  sgFrontEnd:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: FrontEndSG
+      GroupDescription: 'Grupo publico con acceso a Internet'
+      VpcId:
+        Ref: vpcdef
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: !Join [ "-" , [ !Ref VPCName, sgFrontEnd ]]
+ 
+
+  # EC2Role:
+  #   Type: "AWS::IAM::Role"
+  #   Properties:
+  #     AssumeRolePolicyDocument: 
+  #       Version: "2012-10-17"
+  #       Statement: 
+  #        -  Effect: "Allow"
+  #           Principal: 
+  #             Service: 
+  #               - "ec2.amazonaws.com"
+  #           Action: 
+  #             - "sts:AssumeRole"
+
+  # RolePolicies: 
+  #   Type: "AWS::IAM::Policy"
+  #   Properties: 
+  #     PolicyName: "TallerEC2Policy"
+  #     PolicyDocument: 
+  #       Version: "2012-10-17"
+  #       Statement: 
+  #         - Effect: "Allow"
+  #           Action: 
+  #             - "s3:Get*"
+  #             - "s3:List*"
+  #           Resource: "*"
+  #     Roles: 
+  #       - 
+  #         Ref: "EC2Role"
+
+  # RootInstanceProfile: 
+  #   Type: "AWS::IAM::InstanceProfile"
+  #   Properties: 
+  #     Roles: 
+  #       - 
+  #         Ref: "EC2Role"
+
+  # dnsname:
+  #   Type: AWS::Route53::RecordSet
+  #   Properties:
+  #     HostedZoneName: arkho.review. #!Ref 'HostedZone'
+  #     Comment: DNS name para instancia de Taller
+  #     Name: taller.arkho.review.    #!Join ['', [user1, ., !Ref 'HostedZone', .]]
+  #     Type: A
+  #     TTL: '900'
+  #     ResourceRecords:
+  #     - !GetAtt Tallerhost1.PublicIp
+
+
+
+
+
+ 
+
