@@ -1,0 +1,316 @@
+AWSTemplateFormatVersion: 2010-09-09
+Mappings:
+  RegionMap:
+    us-east-1:
+      "1" : "ami-43a15f3e" #Cambiar por la que corresponda
+    us-east-2:
+      "1" : "ami-916f59f4"
+Parameters:
+  FrontEndHostName:
+    Type: String
+    Description: Nombre de host que tendra el frontend 
+    Default: prueba.institutoncologicofalp.cl 
+  KeyPairs:
+    Type: List<AWS::EC2::KeyPair::KeyName>
+    Description: Par de claves para accesos a Instancias
+  # authorizedIp:
+  #   Type: String
+  #   Description: IP que esta autorizada a ingresar a los recursos privados de esta VPC
+  #   Default: "0.0.0.0/0"
+  #   AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+  VPCID:
+    Type: String
+    Description: Identificador de la Subred
+  VPCCIDR:
+    Type: String
+    Description: Bloque IP de la VPC
+    Default: 171.16.5.0/24
+  Ambiente:
+    Type: String
+    Default: Taller
+
+  subnet1:
+    Type: String
+    Description: Public 1
+  subnet2:
+    Type: String
+    Description: Public 2
+  subnet3:
+    Type: String
+    Description: Public 3
+  subnet1:
+    Type: String
+    Description: Public 4
+  SubnetZona1:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+  SubnetZona3:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+
+Resources:
+ 
+  sgFrontEnd:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: FrontEndSG
+      GroupDescription: 'Grupo publico con acceso a Internet'
+      VpcId:
+        Ref: VPCID
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: !Join [ "-" , [!Ref Ambiente, sgFrontEnd ]]
+  sgBackend:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: BackEndSG
+      GroupDescription: 'Grupo privado'
+      VpcId:
+        Ref: VPCID
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: !Ref VPCCIDR
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: !Ref VPCCIDR
+      Tags:
+      - Key: Name
+        Value: !Join [ "-" , [!Ref Ambiente, sgBackend ]]
+  
+
+  IFSubnet1:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref subnet1
+      Description: Interfdaz para instancia publica
+      PrivateIpAddress: '171.16.5.10'
+      SourceDestCheck: true
+      GroupSet:
+        - Ref: sgFrontEnd
+      Tags:
+        - Key: Network
+          Value: Web
+        - Key: Name
+          Value: ifsubnet1
+        - Key: Host
+          Value: Bastion
+
+#Role para codedeploy, mover a otro lugar
+  CodeDeployEC2Role:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+         -  Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+
+  RolePolicies: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: "CodeDeployEC2Policy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: 
+              - "s3:Get*"
+              - "s3:List*"
+            Resource: "*"
+      Roles: 
+        - 
+          Ref: "CodeDeployEC2Role"
+
+  RootInstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Roles: 
+        - 
+          Ref: "CodeDeployEC2Role"
+
+#Máquina Bastión
+  BastionHost:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !FindInMap [ RegionMap,!Ref "AWS::Region" , "1" ]
+      InstanceType: 't2.micro'
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdm"
+          Ebs:
+            VolumeType: io1
+            Iops: 1000
+            DeleteOnTermination: true
+            VolumeSize: "30"
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref IFSubnet1
+          DeviceIndex: 0
+      KeyName: !Select [0,!Ref KeyPairs]
+      Tags:
+        - Key: Name
+          Value: !Join ["-",[ Bastion ,!Ref Ambiente ]]
+        - Key: Type
+          Value: Bastion
+          
+  EIP1:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: vpc
+
+  EIPAttachment:
+    Type: "AWS::EC2::EIPAssociation"
+    Properties:
+      AllocationId: !GetAtt EIP1.AllocationId
+      NetworkInterfaceId: !Ref IFSubnet1
+  ######       
+  PublicSiteLoadBalancer:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - Ref: sgFrontEnd
+      Subnets:
+        - Ref: subnet1
+        - Ref: subnet2
+      Tags:
+        - Key: Name
+          Value: PublicLoadBalancer
+
+  Listener1:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties: 
+      DefaultActions:
+        - Type:  forward
+          TargetGroupArn:
+            Ref: LoadBalancerTargetGroup
+      LoadBalancerArn:
+        Ref: PublicSiteLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: LoadBalancerTargetGroup
+      Conditions:
+      - Field: host-header
+        Values:
+        - Ref: FrontEndHostName
+      ListenerArn:
+        Ref: Listener1
+      Priority: 1
+
+  AutoScalingConfig:
+    Type : "AWS::AutoScaling::LaunchConfiguration"
+    Properties : 
+        IamInstanceProfile : !Ref RootInstanceProfile
+        ImageId : !FindInMap [ RegionMap,!Ref "AWS::Region" , "1" ]
+        InstanceType : 't2.micro'   #!Ref InstanceType
+        KeyName : !Select [0,!Ref KeyPairs]
+        SecurityGroups :
+          -  Ref: sgBackend
+        BlockDeviceMappings:
+          - DeviceName: "/dev/sdm"
+            Ebs:
+              VolumeType: io1
+              Iops: 1000
+              DeleteOnTermination: true
+              VolumeSize: "30"
+        UserData :
+            Fn::Base64: !Sub |
+              #!/bin/bash 
+              apt-get update
+
+              apt-get -y install ruby wget apt-transport-https ca-certificates curl software-properties-common nfs-common default-jre
+
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+              apt-get update 
+
+              cd /home/ubuntu 
+              wget https://aws-codedeploy-us-east-2.s3.amazonaws.com/latest/install 
+              chmod +x ./install 
+              ./install auto 
+              service codedeploy-agent start 
+
+  LoadBalancerTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckTimeoutSeconds: 10
+      HealthCheckPath: /
+      Matcher:
+        HttpCode: '200-399'
+      Name: !Join ["-",[!Ref Ambiente, "AutoscalingGroup"  ]]
+      TargetType: instance
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        Ref: VPCID
+      Tags:
+        - Key: Role
+          Value: Public
+        - Key: Name
+          Value: Instance
+
+ 
+  AutoScaling:
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    Properties:
+      AutoScalingGroupName: !Join ["-",[!Ref Ambiente , !Ref AppName  ]]
+      AvailabilityZones:
+        - !Select [0,!Ref SubnetZona1]
+        - !Select [0,!Ref SubnetZona2]
+      Cooldown: 60
+      DesiredCapacity: 1
+      HealthCheckGracePeriod: 60
+      HealthCheckType: ELB
+      LaunchConfigurationName: !Ref AutoScalingConfig
+      MaxSize: 2
+      MinSize: 1
+      Tags:
+        - Key: Type
+          Value: Public
+          PropagateAtLaunch: true
+        - Key: Name
+          Value: !Join [ "-", [ !Ref Ambiente, Public-Instance]]
+          PropagateAtLaunch: true
+        - Key: Ambiente
+          Value: !Ref Ambiente
+          PropagateAtLaunch: true
+      TargetGroupARNs:
+          - Ref: LoadBalancerTargetGroup
+      VPCZoneIdentifier:
+        - Ref: subnet3
+        - Ref: subnet4
+
+ 
+
+Outputs:
+  ELBDNSName:
+    Description: Nombre de host del balanceador de carga para crear un CNAME
+    Value: !GetAtt PublicSiteLoadBalancer.DNSName
+    Export:
+     Name: !Join [ "-", [ !Ref "AWS::StackName", "FrontendHost" ]]

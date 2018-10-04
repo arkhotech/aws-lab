@@ -1,0 +1,225 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  CodeCommitRepository:
+    Type: String
+    Description: Repositorio de codecommit
+  branch:
+    Type: String
+    Description: Repositorio de codecommit
+    Default: "feature/cloud"
+  Ambiente:
+    Type: String
+    Default: PROD
+  AprobalEmail:
+    Description: Correo electronico de responsable de aprobar pasos de codigo a produccion o QA
+    Type: String
+    Default: msilva@arkhotech.com
+  AppName:
+    Description: AppName para el pipeline
+    Type: String
+    Default: FALP
+Conditions:
+  QA:  !Equals [ !Ref Ambiente, "QA" ]
+  PROD: !Equals [ !Ref Ambiente, "PROD" ]
+Resources:
+  CodePipelineS3Bucket:
+    Type: "AWS::S3::Bucket"
+
+  ApprovalTopic:
+    Type: "AWS::SNS::Topic"
+    Description: Envio de notificaciones de aprobación para despliegue con CodePipeline
+    Properties: 
+        DisplayName: !Join ["-", [ !Ref Ambiente, !Ref AppName, "PipelineApproval"  ]]
+        TopicName: !Join ["-", [ !Ref Ambiente, !Ref AppName, "PipelineApproval" ]]
+  
+  ApprovalSuscrition:
+        Type: "AWS::SNS::Subscription"
+        Properties:
+            Endpoint: !Ref AprobalEmail
+            Protocol: email
+            TopicArn: !Ref ApprovalTopic
+
+  CodePipelineServiceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+         -  Effect: "Allow"
+            Principal: 
+              Service: 
+                - "codepipeline.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+
+  RolePolicies: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: !Join [ "-" , [ !Ref Ambiente, !Ref AppName, PipelinePolicity  ]]
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+        - Action:
+          - codepipeline:* 
+          Resource: "*"
+          Effect: Allow 
+        - Action:
+          - s3:PutObject
+          Resource:
+          - arn:aws:s3:::codepipeline*
+          - arn:aws:s3:::elasticbeanstalk*
+          Effect: Allow
+        - Action:
+          - codecommit:CancelUploadArchive
+          - codecommit:GetBranch
+          - codecommit:GetCommit
+          - codecommit:GetUploadArchiveStatus
+          - codecommit:UploadArchive
+          Resource: "*"
+          Effect: Allow
+        - Action:
+          - codedeploy:CreateDeployment
+          - codedeploy:GetApplicationRevision
+          - codedeploy:GetDeployment
+          - codedeploy:GetDeploymentConfig
+          - codedeploy:RegisterApplicationRevision
+          Resource: "*"
+          Effect: Allow
+        - Action:
+          - elasticbeanstalk:*
+          - ec2:*
+          - elasticloadbalancing:*
+          - autoscaling:*
+          - cloudwatch:*
+          - s3:*
+          - sns:*
+          - cloudformation:*
+          - rds:*
+          - iam:PassRole
+          Resource: "*"
+          Effect: Allow
+        - Action:
+          - lambda:InvokeFunction
+          - lambda:ListFunctions
+          Resource: "*"
+          Effect: Allow
+      Roles: 
+        - Ref: "CodePipelineServiceRole"
+
+  AppPipeline:
+    Type: "AWS::CodePipeline::Pipeline"
+    DependsOn: CodePipelineServiceRole
+    Condition: PROD
+    Properties:
+      Name: !Join ["-",[ !Ref Ambiente, !Ref AppName ] ]
+      RoleArn: !GetAtt [ CodePipelineServiceRole, Arn ]
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source    #Source | Build | Deploy | Test | Invoke | Approval
+                Owner: AWS
+                Version: 1
+                Provider: CodeCommit
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                RepositoryName: !Ref CodeCommitRepository
+                BranchName: !Ref branch
+              RunOrder: 1
+        - Name: Approve
+          Actions:
+            - Name: UserApprove
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              Configuration:
+                NotificationArn: !Ref ApprovalTopic
+                CustomData: !Sub 'Esta a punto de desplegarse una aplicacion a produccion, se necesita su aprobacion'
+        - Name: Deploy
+          Actions:
+            - Name: DeployPublicApplication
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CodeDeploy
+              Configuration:
+                ApplicationName: !Join [ "-", [ !Ref AppName , !Ref Ambiente ]]
+                DeploymentGroupName: !Join ["-" , [ !Ref AppName , !Ref Ambiente, "PUBLIC"]]
+              RunOrder: 1
+            - Name: DeployAdmin
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CodeDeploy
+              Configuration:
+                ApplicationName: !Join [ "-", [ !Ref AppName , !Ref Ambiente ]]
+                DeploymentGroupName: !Join ["-" , [ !Ref AppName , !Ref Ambiente,"ADMIN"]]
+              RunOrder: 2
+      ArtifactStore:
+        Type: S3
+        Location:
+          Ref: CodePipelineS3Bucket
+  AppPipelineQa:
+    Type: "AWS::CodePipeline::Pipeline"
+    DependsOn: CodePipelineServiceRole
+    Condition: QA
+    Properties:
+      Name: !Join ["-",[ !Ref Ambiente, !Ref AppName ] ]
+      RoleArn: !GetAtt [ CodePipelineServiceRole, Arn ]
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source    #Source | Build | Deploy | Test | Invoke | Approval
+                Owner: AWS
+                Version: 1
+                Provider: CodeCommit
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                RepositoryName: !Ref CodeCommitRepository
+                BranchName: !Ref branch
+              RunOrder: 1
+        - Name: Approve
+          Actions:
+            - Name: UserApprove
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              Configuration:
+                NotificationArn: !Ref ApprovalTopic
+                CustomData: !Sub 'Esta a punto de desplegarse una aplicacion a produccion, se necesita su aprobacion'
+        - Name: Deploy
+          Actions:
+            - Name: DeployPublicApplication
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CodeDeploy
+              Configuration:
+                ApplicationName: !Join [ "-", [ !Ref AppName , !Ref Ambiente ]]
+                DeploymentGroupName: !Join ["-" , [ !Ref AppName , !Ref Ambiente, "PUBLIC"]]
+              RunOrder: 1
+
+      ArtifactStore:
+        Type: S3
+        Location:
+          Ref: CodePipelineS3Bucket
+
+

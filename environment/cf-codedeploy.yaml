@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  Ambiente:
+    Type: String
+    Description: Sufijo del ambiente que se va a desplegar
+    Default: PROD 
+  infoTopic:
+    Type: String
+    Description: ARN SNS para información de despliegue
+  errorTopic:
+    Type: String
+    Description: ARN SNS para informacion de errores en Deploy
+  Prefijo:
+    Description: Prefijo para el pipeline
+    Type: String
+    Default: FALP
+  PrefijoAutoscaling:
+    Description: Prefijo de los grupo de AutoScalingGroups
+    Type: String
+    Default: FALP
+Conditions:
+    PROD: !Equals [ !Ref Ambiente, PROD ]
+Resources:
+  CodeDeployRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+         -  Effect: "Allow"
+            Principal: 
+              Service: 
+                - "codedeploy.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+
+  RolePolicies: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: !Join [ "-", [ !Ref Prefijo,"CodeDeployEC2Policy", !Ref Ambiente ]]
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: 
+              - "ec2:*"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: 
+              - "sns:Publish"
+            Resource: "*"
+          - Effect: "Allow"
+            Action:
+              - "elasticloadbalancing:*"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: 
+              - "cloudwatch:*"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: 
+              - "autoscaling:*"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: 
+              - "iam:CreateServiceLinkedRole"
+            Resource: "*"
+            Condition:
+                StringEquals:
+                    iam:AWSServiceName: 
+                       -  "autoscaling.amazonaws.com"
+                       -  "ec2scheduled.amazonaws.com"
+                       -  "elasticloadbalancing.amazonaws.com"
+                       -  "spot.amazonaws.com"
+                       -  "spotfleet.amazonaws.com" 
+          - Effect: "Allow"
+            Action:
+              - "tag:GetTags"
+              - "tag:GetResources"
+              - "cloudwatch:DescribeAlarms"
+              - "cloudwatch:PutMetricAlarm"
+              - "elasticloadbalancing:DescribeLoadBalancers"
+              - "elasticloadbalancing:DescribeInstanceHealth"
+              - "elasticloadbalancing:RegisterInstancesWithLoadBalancer"
+              - "elasticloadbalancing:DeregisterInstancesFromLoadBalancer"
+              - "elasticloadbalancing:DescribeTargetGroups"
+              - "elasticloadbalancing:DescribeTargetHealth"
+              - "elasticloadbalancing:RegisterTargets"
+            Resource: "*"
+      Roles: 
+        - 
+          Ref: "CodeDeployRole"
+
+  CodeDeployApplication:
+    Type: 'AWS::CodeDeploy::Application'
+    DependsOn: RolePolicies
+    Properties:
+      ApplicationName: !Join [ "-", [ !Ref Prefijo, !Ref Ambiente ]]
+      ComputePlatform: Server
+
+  FALPAplication:
+    Type: "AWS::CodeDeploy::DeploymentGroup"
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      AutoScalingGroups:
+        - !Join ["-" , [ !Ref Ambiente, !Ref PrefijoAutoscaling]]
+      DeploymentGroupName: !Join ["-" , [ !Ref Prefijo, !Ref Ambiente, "PUBLIC"]]
+      AutoRollbackConfiguration:
+        Enabled: 'true'
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_REQUEST
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+#DeploymentStart | DeploymentSuccess | DeploymentFailure | DeploymentStop | DeploymentRollback | DeploymentReady | InstanceStart | InstanceSuccess | InstanceFailure | InstanceReady
+      TriggerConfigurations:
+        - TriggerEvents:
+            - DeploymentStart
+            - DeploymentSuccess
+            - InstanceStart
+            - InstanceSuccess
+          TriggerName: DeploymentTrigger
+          TriggerTargetArn: !Ref infoTopic
+        - TriggerEvents:
+            - DeploymentFailure
+            - InstanceFailure
+          TriggerName: ProcessError
+          TriggerTargetArn: !Ref errorTopic
+
+
+  FALPAdmin:
+    Type: "AWS::CodeDeploy::DeploymentGroup"
+    Condition: PROD
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      AutoScalingGroups:
+        - !Join ["-" , [ !Ref Ambiente , !Ref PrefijoAutoscaling,  "ADMIN"]]
+      DeploymentGroupName: !Join ["-" , [ !Ref Prefijo, !Ref Ambiente, "ADMIN"]]
+      AutoRollbackConfiguration:
+        Enabled: 'true'
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_REQUEST
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+      TriggerConfigurations:
+        - TriggerEvents:
+            - DeploymentStart
+            - DeploymentSuccess
+            - InstanceStart
+            - InstanceSuccess
+          TriggerName: DeploymentTrigger
+          TriggerTargetArn: !Ref infoTopic
+        - TriggerEvents:
+            - DeploymentFailure
+            - InstanceFailure
+          TriggerName: ProcessError
+          TriggerTargetArn: !Ref errorTopic
+
+Outputs:
+   ApplicationName:
+    Description: ARN del topic para manejar eventos de Cloudformation
+    Value: !Join [ "-", [ !Ref Prefijo, !Ref Ambiente ]]
+
