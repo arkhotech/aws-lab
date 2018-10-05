@@ -13,11 +13,6 @@ Parameters:
   KeyPairs:
     Type: List<AWS::EC2::KeyPair::KeyName>
     Description: Par de claves para accesos a Instancias
-  # authorizedIp:
-  #   Type: String
-  #   Description: IP que esta autorizada a ingresar a los recursos privados de esta VPC
-  #   Default: "0.0.0.0/0"
-  #   AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
   VPCID:
     Type: String
     Description: Identificador de la Subred
@@ -28,7 +23,9 @@ Parameters:
   Ambiente:
     Type: String
     Default: Taller
-
+  AppName:
+    Type: String
+    Default: Taller
   subnet1:
     Type: String
     Description: Public 1
@@ -38,13 +35,9 @@ Parameters:
   subnet3:
     Type: String
     Description: Public 3
-  subnet1:
+  subnet4:
     Type: String
     Description: Public 4
-  SubnetZona1:
-    Type: List<AWS::EC2::AvailabilityZone::Name>
-  SubnetZona3:
-    Type: List<AWS::EC2::AvailabilityZone::Name>
 
 Resources:
  
@@ -97,7 +90,6 @@ Resources:
     Properties:
       SubnetId: !Ref subnet1
       Description: Interfdaz para instancia publica
-      PrivateIpAddress: '171.16.5.10'
       SourceDestCheck: true
       GroupSet:
         - Ref: sgFrontEnd
@@ -175,11 +167,12 @@ Resources:
       Domain: vpc
 
   EIPAttachment:
+    DependsOn: BastionHost
     Type: "AWS::EC2::EIPAssociation"
     Properties:
       AllocationId: !GetAtt EIP1.AllocationId
       NetworkInterfaceId: !Ref IFSubnet1
-  ######       
+#   ######       
   PublicSiteLoadBalancer:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
@@ -281,8 +274,8 @@ Resources:
     Properties:
       AutoScalingGroupName: !Join ["-",[!Ref Ambiente , !Ref AppName  ]]
       AvailabilityZones:
-        - !Select [0,!Ref SubnetZona1]
-        - !Select [0,!Ref SubnetZona2]
+        - !Select [ 0, !GetAZs '' ]
+        - !Select [ 1, !GetAZs '' ]
       Cooldown: 60
       DesiredCapacity: 1
       HealthCheckGracePeriod: 60
@@ -303,14 +296,14 @@ Resources:
       TargetGroupARNs:
           - Ref: LoadBalancerTargetGroup
       VPCZoneIdentifier:
-        - Ref: subnet3
-        - Ref: subnet4
+        - Ref: subnet1
+        - Ref: subnet2
 
  
 
-Outputs:
-  ELBDNSName:
-    Description: Nombre de host del balanceador de carga para crear un CNAME
-    Value: !GetAtt PublicSiteLoadBalancer.DNSName
-    Export:
-     Name: !Join [ "-", [ !Ref "AWS::StackName", "FrontendHost" ]]
+# Outputs:
+#   ELBDNSName:
+#     Description: Nombre de host del balanceador de carga para crear un CNAME
+#     Value: !GetAtt PublicSiteLoadBalancer.DNSName
+#     Export:
+#      Name: !Join [ "-", [ !Ref "AWS::StackName", "FrontendHost" ]]

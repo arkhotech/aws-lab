@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: 2010-09-09
+Mappings:
+  RegionMap:
+    us-east-1:
+      "1" : "ami-43a15f3e" #Cambiar por la que corresponda
+    us-east-2:
+      "1" : "ami-916f59f4"
+Parameters:
+  EnvironmentName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+  VpcCIDR: 
+        Description: Please enter the IP range (CIDR notation) for this VPC
+        Type: String
+        Default: 172.16.5.0/24
+  PublicSubnet1CIDR:
+        Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+        Type: String
+        Default: 172.16.5.0/26
+  PublicSubnet2CIDR:
+        Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+        Type: String
+        Default: 172.16.5.64/26
+  PrivateSubnet1CIDR:
+        Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+        Type: String
+        Default: 172.16.5.128/26
+  PrivateSubnet2CIDR:
+        Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+        Type: String
+        Default: 172.16.5.192/26
+  Ambiente:
+    Type: String
+    Default: Taller
+  KeyPairs:
+    Type: List<AWS::EC2::KeyPair::KeyName>
+    Description: Par de claves para accesos a Instancias
+  FrontEndHostName:
+    Type: String
+    Default: taller.arkho.review
+
+Resources:
+
+  VPC:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VpcCIDR: !Ref VpcCIDR
+        PublicSubnet1CIDR: !Ref PublicSubnet1CIDR
+        PublicSubnet2CIDR: !Ref PublicSubnet2CIDR
+        PrivateSubnet1CIDR: !Ref PrivateSubnet1CIDR
+        PrivateSubnet2CIDR: !Ref PrivateSubnet2CIDR
+      Tags:
+        - Key: Ambiente
+          Value: !Ref Ambiente
+      TemplateURL: https://s3.amazonaws.com/poc.arkhotech.com/poc-ic/platform/codebuild-vpc.yml
+
+  Platform:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: VPC
+    Properties:
+      Parameters:
+        FrontEndHostName: !Ref FrontEndHostName
+        KeyPairs: !Select [0,!Ref KeyPairs]
+        VPCID: !GetAtt [VPC, Outputs.VPC ] 
+        VPCCIDR: !Ref VpcCIDR
+        Ambiente: !Ref Ambiente
+        AppName: !Ref Ambiente
+        subnet1: !GetAtt [VPC, Outputs.PublicSubnet1] 
+        subnet2: !GetAtt [VPC, Outputs.PublicSubnet2] 
+        subnet3: !GetAtt [VPC, Outputs.PrivateSubnet1] 
+        subnet4: !GetAtt [VPC, Outputs.PrivateSubnet2] 
+
+      Tags:
+        - Key: Ambiente
+          Value: !Ref Ambiente
+      TemplateURL: https://s3.amazonaws.com/poc.arkhotech.com/poc-ic/platform/instances.yaml
+
+
