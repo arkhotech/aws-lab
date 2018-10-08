@@ -6,29 +6,39 @@ Mappings:
     us-east-2:
       "1" : "ami-916f59f4"
 Parameters:
+  AdminEmail:
+    Type: String
+    Default: msilva@arkhotech.com
+    Description:  Email del administrador de Code Deploy
+  PrefijoAutoscaling:
+    Type: String
+    Default: TestApp
+  AppName:
+    Type: String
+    Default: TestApp
   EnvironmentName:
-        Description: An environment name that will be prefixed to resource names
-        Type: String
+    Description: An environment name that will be prefixed to resource names
+    Type: String
   VpcCIDR: 
-        Description: Please enter the IP range (CIDR notation) for this VPC
-        Type: String
-        Default: 172.16.5.0/24
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 172.16.5.0/24
   PublicSubnet1CIDR:
-        Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
-        Type: String
-        Default: 172.16.5.0/26
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 172.16.5.0/26
   PublicSubnet2CIDR:
-        Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
-        Type: String
-        Default: 172.16.5.64/26
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 172.16.5.64/26
   PrivateSubnet1CIDR:
-        Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
-        Type: String
-        Default: 172.16.5.128/26
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 172.16.5.128/26
   PrivateSubnet2CIDR:
-        Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
-        Type: String
-        Default: 172.16.5.192/26
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 172.16.5.192/26
   Ambiente:
     Type: String
     Default: Taller
@@ -76,5 +86,19 @@ Resources:
         - Key: Ambiente
           Value: !Ref Ambiente
       TemplateURL: https://s3.amazonaws.com/poc.arkhotech.com/poc-ic/platform/instances.yaml
+
+  Codeploy:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: VPC
+    Properties:
+      Parameters:
+        PrefijoAutoscaling: !Ref PrefijoAutoscaling
+        AdminEmail: !Ref AdminEmail
+        Ambiente: !Ref Ambiente
+        ApplicationName: !Ref AppName
+      Tags:
+        - Key: Ambiente
+          Value: !Ref Ambiente
+      TemplateURL: https://s3.amazonaws.com/poc.arkhotech.com/poc-ic/platform/codedeploy.yaml
 
 
