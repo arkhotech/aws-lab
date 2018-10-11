@@ -77,6 +77,7 @@ Resources:
         VPCCIDR: !Ref VpcCIDR
         Ambiente: !Ref Ambiente
         AppName: !Ref Ambiente
+        PrefijoAutoscaling: !Ref PrefijoAutoscaling
         subnet1: !GetAtt [VPC, Outputs.PublicSubnet1] 
         subnet2: !GetAtt [VPC, Outputs.PublicSubnet2] 
         subnet3: !GetAtt [VPC, Outputs.PrivateSubnet1] 
@@ -89,7 +90,7 @@ Resources:
 
   Codeploy:
     Type: "AWS::CloudFormation::Stack"
-    DependsOn: VPC
+    DependsOn: Platform
     Properties:
       Parameters:
         PrefijoAutoscaling: !Ref PrefijoAutoscaling

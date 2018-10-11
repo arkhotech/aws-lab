@@ -26,6 +26,9 @@ Parameters:
   AppName:
     Type: String
     Default: Taller
+  PrefijoAutoscaling:
+    Type: String
+    Default: TestApp
   subnet1:
     Type: String
     Description: Public 1
@@ -236,7 +239,7 @@ Resources:
               apt-get update
 
               apt-get -y install ruby wget apt-transport-https ca-certificates curl software-properties-common nfs-common default-jre
-
+              apt-get -y install nginx
               curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 
               apt-get update 
@@ -245,7 +248,8 @@ Resources:
               wget https://aws-codedeploy-us-east-2.s3.amazonaws.com/latest/install 
               chmod +x ./install 
               ./install auto 
-              service codedeploy-agent start 
+              service codedeploy-agent start
+              service nginx start 
 
   LoadBalancerTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -272,7 +276,7 @@ Resources:
   AutoScaling:
     Type: "AWS::AutoScaling::AutoScalingGroup"
     Properties:
-      AutoScalingGroupName: !Join ["-",[!Ref Ambiente , !Ref AppName  ]]
+      AutoScalingGroupName: !Join ["-",[!Ref Ambiente , !Ref PrefijoAutoscaling  ]]
       AvailabilityZones:
         - !Select [ 0, !GetAZs '' ]
         - !Select [ 1, !GetAZs '' ]
@@ -288,7 +292,7 @@ Resources:
           Value: Public
           PropagateAtLaunch: true
         - Key: Name
-          Value: !Join [ "-", [ !Ref Ambiente, Public-Instance]]
+          Value: !Join [ "-", [ !Ref Ambiente, !Ref PrefijoAutoscaling ]]
           PropagateAtLaunch: true
         - Key: Ambiente
           Value: !Ref Ambiente
