@@ -2,7 +2,7 @@
 
 HOME="/home/ubuntu"
 
-TOMCAT_INSTALL="${HOME}/tomcat"
+TOMCAT_INSTALL="${HOME}/tomcat7"
 
 TOMCAT_VERSION="7.0.91"
 
@@ -17,7 +17,7 @@ if [ ! -d ${TOMCAT_INSTALL} ]; then
 	unzip apache-tomcat-${TOMCAT_VERSION}.zip
 	mv apache-tomcat-${TOMCAT_VERSION} tomcat7
 	chmod 765 tomcat7/bin/*.sh
-	chown -R ubuntu:ubuntu $HOME/tomcat7
+	chown -R ubuntu:ubuntu ${TOMCAT_INSTALL}
 	echo "finalizando la instalación"
 else
 	echo "La instalación existe"
