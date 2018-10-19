@@ -3,7 +3,8 @@ version: 0.2
 phases:
   build:
     commands:
-      - javac Test.java
+      - cd test-webapp
+      - mvn compile package
 artifacts:
   files:
-    - Test.class 
+    - test-webapp/target/test-webapp-1.0-SNAPSHOT.war

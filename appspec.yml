@@ -1,0 +1,24 @@
+version: 0.0
+os: linux
+files:
+  - source: /test-webapp-1.0-SNAPSHOT.war
+    destination: /tomcat/webapps
+
+permissions:
+  - object: /tomcat/webappa/test-webapp-1.0-SNAPSHOT.war
+    group: ubuntu
+    owner: ubuntu
+    mode: 644
+    type:
+      - file
+
+hooks:
+  ApplicationStop:
+    - location: scripts/stop-app.sh
+  ApplicationStart:
+    - location: scripts/start-app.sh
+  AfterInstall:
+    - location: scripts/after-install.sh
+  BeforeInstall:
+    - location: scripts/before-install.sh
+

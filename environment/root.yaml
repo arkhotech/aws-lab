@@ -6,6 +6,14 @@ Mappings:
     us-east-2:
       "1" : "ami-916f59f4"
 Parameters:
+  GithubToken:
+    Description: Token Oauth para acceder al repositorio
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: github-oauth-token
+  GithubOwner:
+    Description: Usario Owner del repositorio
+    Type: String
+    Default: sebekmsd
   AdminEmail:
     Type: String
     Default: msilva@arkhotech.com
@@ -48,6 +56,10 @@ Parameters:
   FrontEndHostName:
     Type: String
     Default: taller.arkho.review
+  GitURL:
+    Type: String
+  Branch: 
+    Type: String
 
 Resources:
 
@@ -102,4 +114,33 @@ Resources:
           Value: !Ref Ambiente
       TemplateURL: https://s3.amazonaws.com/poc.arkhotech.com/poc-ic/platform/codedeploy.yaml
 
+  CodeBuild:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: Codeploy
+    Properties:
+      Parameters:
+        Ambiente: !Ref Ambiente
+        VPC: !GetAtt [VPC, Outputs.VPC ]
+        Subnet: !GetAtt [VPC, Outputs.PrivateSubnet1] 
+        SecurityGroup: !GetAtt [VPC, Outputs.NoIngressSecurityGroup ]
 
+      Tags:
+        - Key: Ambiente
+          Value: !Ref Ambiente
+      TemplateURL: https://s3.amazonaws.com/poc.arkhotech.com/poc-ic/platform/codebuild.yaml
+  CodePipeline:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: CodeBuild
+    Properties:
+      Parameters:
+        Repository: !Ref GitURL
+        RepoOwner: !Ref GithubOwner
+        OAuthToken: !Ref GithubToken
+        Branch: !Ref Branch
+        Ambiente: !Ref Ambiente
+        AppName: !Ref AppName
+        CodeBuildProject: !GetAtt [CodeBuild, Outputs.CodeBuildProject ]
+      Tags:
+        - Key: Ambiente
+          Value: !Ref Ambiente
+      TemplateURL: https://s3.amazonaws.com/poc.arkhotech.com/poc-ic/platform/pipeline.yaml
