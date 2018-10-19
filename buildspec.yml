@@ -8,3 +8,5 @@ phases:
 artifacts:
   files:
     - test-webapp/target/test-webapp-1.0-SNAPSHOT.war
+    - appspec.yml
+    - scripts/*.sh
