@@ -1,11 +1,13 @@
 version: 0.0
 os: linux
 files:
-  - source: /test-webapp-1.0-SNAPSHOT.war
-    destination: /tomcat/webapps
+  - source: test-webapp-1.0-SNAPSHOT.war
+    destination: /home/ubuntu/tomcat7/webapps
+  - source: config/tomcat-users.xml
+    destination: /home/ubuntu/tomcat7/config
 
 permissions:
-  - object: /tomcat/webappa/test-webapp-1.0-SNAPSHOT.war
+  - object: /home/ubuntu/tomcat7/webapps/test-webapp-1.0-SNAPSHOT.war
     group: ubuntu
     owner: ubuntu
     mode: 644

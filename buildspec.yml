@@ -5,9 +5,10 @@ phases:
     commands:
       - cd test-webapp
       - mvn compile package
-      - mv target/test-webapp-1.0-SNAPSHOT.war ..
+      - mv target/test-webapp-1.0-SNAPSHOT.war ../test-webapp.war
 artifacts:
   files:
-    - test-webapp-1.0-SNAPSHOT.war
+    - test-webapp.war
     - appspec.yml
     - scripts/*.sh
+    - config/*
