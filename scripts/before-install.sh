@@ -16,6 +16,7 @@ if [ ! -d ${TOMCAT_INSTALL} ]; then
 	wget ${TOMCAT_URL}
 	unzip apache-tomcat-${TOMCAT_VERSION}.zip
 	mv apache-tomcat-${TOMCAT_VERSION} tomcat7
+	rm apache-tomcat-${TOMCAT_VERSION}.zip
 	chmod 765 tomcat7/bin/*.sh
 	chown -R ubuntu:ubuntu ${TOMCAT_INSTALL}
 	echo "finalizando la instalación"
