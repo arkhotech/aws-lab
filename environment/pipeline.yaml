@@ -169,8 +169,8 @@ Resources:
                 Version: 1
                 Provider: CodeDeploy
               Configuration:
-                ApplicationName: !Join [ "-", [ !Ref AppName , !Ref Ambiente ]]
-                DeploymentGroupName: !Join ["-" , [ !Ref AppName , !Ref Ambiente, "PUBLIC"]]
+                ApplicationName: !Join [ "-", [  !Ref Ambiente, !Ref AppName ]]
+                DeploymentGroupName: !Join ["-" , [  !Ref Ambiente, !Ref AppName ]]
               RunOrder: 1
 
       ArtifactStore:
