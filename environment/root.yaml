@@ -13,7 +13,10 @@ Parameters:
   GithubOwner:
     Description: Usario Owner del repositorio
     Type: String
-    Default: sebekmsd
+    Default: arkhotech
+  HostedZoneResource:
+    Type: String
+    Default: .arkho.review
   AdminEmail:
     Type: String
     Default: msilva@arkhotech.com
@@ -84,6 +87,7 @@ Resources:
     Properties:
       Parameters:
         FrontEndHostName: !Ref FrontEndHostName
+        HostedZoneResource: !Ref HostedZoneResource
         KeyPairs: !Select [0,!Ref KeyPairs]
         VPCID: !GetAtt [VPC, Outputs.VPC ] 
         VPCCIDR: !Ref VpcCIDR

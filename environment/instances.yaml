@@ -6,6 +6,9 @@ Mappings:
     us-east-2:
       "1" : "ami-916f59f4"
 Parameters:
+  HostedZoneResource:
+    Type: String
+    Default: .arkho.review
   FrontEndHostName:
     Type: String
     Description: Nombre de host que tendra el frontend 
@@ -37,10 +40,10 @@ Parameters:
     Description: Public 2
   subnet3:
     Type: String
-    Description: Public 3
+    Description: Private 3
   subnet4:
     Type: String
-    Description: Public 4
+    Description: Private 4
 
 Resources:
  
@@ -52,14 +55,14 @@ Resources:
       VpcId:
         Ref: VPCID
       SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: '80'
-        ToPort: '80'
-        CidrIp: 0.0.0.0/0
-      - IpProtocol: tcp
-        FromPort: '443'
-        ToPort: '443'
-        CidrIp: 0.0.0.0/0
+      # - IpProtocol: tcp
+      #   FromPort: '80'
+      #   ToPort: '80'
+      #   CidrIp: 0.0.0.0/0
+      # - IpProtocol: tcp
+      #   FromPort: '443'
+      #   ToPort: '443'
+      #   CidrIp: 0.0.0.0/0
       - IpProtocol: tcp
         FromPort: '22'
         ToPort: '22'
@@ -244,6 +247,7 @@ Resources:
 
               apt-get update 
 
+              apt-get install -y jq
               cd /home/ubuntu 
               wget https://aws-codedeploy-us-east-2.s3.amazonaws.com/latest/install 
               chmod +x ./install 
@@ -303,7 +307,27 @@ Resources:
         - Ref: subnet1
         - Ref: subnet2
 
- 
+  DnsName:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Ref 'HostedZoneResource'
+      Comment: DNS name pra balancer del taller
+      Name: !Join ['', ['awslab', ., !Ref 'HostedZoneResource']]
+      Type: CNAME
+      TTL: '900'
+      ResourceRecords:
+      - !GetAtt PublicSiteLoadBalancer.DNSName
+
+  BastionDnsName:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Ref 'HostedZoneResource'
+      Comment: DNS name pra balancer del taller
+      Name: !Join ['', ['bastion', ., !Ref 'HostedZoneResource']]
+      Type: A
+      TTL: '900'
+      ResourceRecords:
+      - !GetAtt BastionHost.PublicIp
 
 # Outputs:
 #   ELBDNSName:
