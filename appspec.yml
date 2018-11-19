@@ -17,9 +17,15 @@ permissions:
 hooks:
   ApplicationStop:
     - location: scripts/stop-app.sh
+      runas: ubuntu
+      timeout: 120
   ApplicationStart:
     - location: scripts/start-app.sh
+      runas: ubuntu
   AfterInstall:
     - location: scripts/after-install.sh
+      runas: ubuntu
   BeforeInstall:
     - location: scripts/before-install.sh
+      runas: ubuntu
+      timeout: 300
